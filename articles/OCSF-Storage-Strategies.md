@@ -70,6 +70,8 @@ Iceberg allows for schema column changes, partitioning and sorting changes at an
 
 Over time, data can get stale, or the frequency of new data subsides such that the underlying files become too small, hindering compression, and forcing more file opens. For partitioning and sorting changes that would benefit historical data, rewriting the table files to compact them into more optimum sizes (usually around 125 MB) can be done. This is termed compaction and is part of the maintenance of the Iceberg lakehouse. As schema changes can be made at any time, for example adding class tables, new partitions, or adding columns to existing tables, the volume flow frequency that fragments the Parquet files will benefit from compaction periodically.
 
+Compaction does not need to be applied to an entire table, but can be applied to specific partitions or date ranges.
+
 ### Limits
 
 There are no theoretical limits in Iceberg as to how many columns or rows a given table can contain, and with schema evolution, alterations are metadata changes that don't need to touch existing data files. However in practice, too many columns in particular can surface operational issues depending on query engines, catalogs and field ID assignments. The latter is of particular concern with OCSF and Iceberg, due to the number of unique columns the array and structure decomposition entails.
@@ -80,15 +82,29 @@ While these limits (e.g. 10,000 columns or 1000 structured sub-columns) might se
 
 ### OCSF Profiles
 
+The structure of Iceberg tables is directly a function of the OCSF attributes of the class or classes modeled by the table. OCSF profiles can augment those attributes to broaden the applicability of a class, and those profile attributes are not bound by the categories of the classes. For example, adding `device` and `actor` attributes to network classes can be done by applying the `Host` profile to `network_activity`. This would be common for EDR events that can report network activity from a computer, including what user or process initiated the activity.
+
+This means that the Iceberg tables will have additional columns from the profiles that may be applied to classes. These columns can be added a priori, ready for events that include profile attributes, or as part of the schema evolution of the tables, when onboarding event sources from products that emit them.
 
 ## Single Table Join-Union
+
 One obvious approach that has been used at large scale is a single, partitioned table with structured Parquet columns. Logically, separate class tables would be joined (as with a LEFT OUTER JOIN), and the table would be a union of the events across all classes.
 
-Given the number of OCSF dictionary attributes that can be combined into the number of OCSF objects, and optional profiles that add attributes across classes and objects, the distinct number of underlying Iceberg columns can be very high. Nevertheless, with proper partitioning this approach has its advantages.
+Given the number of OCSF dictionary attributes that can be combined into the number of OCSF objects, and optional profiles that add attributes across classes and objects, the distinct number of underlying Iceberg column Field IDs can be very high. Nevertheless, with proper partitioning this approach has its advantages. In practice, not every class is required for the particular event sources that are stored. They can be added as necessary with schema evolution metadata updates.
 
 ### Single Table Pros
+-	A stable number of tables (1)
+-	Reuse of table by multiple products
+-	Minimize duplication of related columns within a table
+-   No cross-table joins for all use cases including single source or product queries
+-   Single target for all ETL targets
+-   Leverage schema evolution for new class and partition maintenance
 
 ### Single Table Cons
+-   Extremely high number of columns may hit metadata and query engine operational limits
+-   The union of all events creates a massive dataset, impacting compaction
+-   Compaction strategy is more complex
+-   All use cases depend on a single table with cross-use-case data mingled in files and partitions
 
 ## By Event Source
 Each event is emitted by an event source, usually associated with a single product with one or more features. A fully normalized or natively producing event source could span many different event classes. Each event class contains attributes which in turn can be of scalar or object type. Objects can have attributes that are scalar or object type, and so on.
@@ -130,6 +146,7 @@ Because of the commonality across event categories, columns are not duplicated a
 
 ### Category Cons
 -	Searching for all events from a single product requires searching all tables if the product events span categories
+-   Table will be larger than by source or by event class impacting compaction
 
 ## By Event Class
 Each OCSF event is an instance of a single OCSF class. Events across different sources share the same classes, distinguished by their `metadata.source` or `metadata.product.name` attributes.
