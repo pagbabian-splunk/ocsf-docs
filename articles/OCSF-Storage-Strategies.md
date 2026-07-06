@@ -156,7 +156,7 @@ However, there are at this time of writing more than 50 event classes and new cl
 More joins are needed when analysis spans classes, as they map to separate tables. Given the commonality of many of the attributes across classes, columnar compression is not maximized. However, for targeted analysis, tables will be smaller (fewer rows).
 
 ### Class Pros
-•	ETL is straightforward as `class_uid` directs the events to its destination
+-	ETL is straightforward as `class_uid` directs the events to its destination
 -	Reuse of tables by multiple products
 -	Fewest number of columns per table
 -	Best for targeted analysis across products emitting the same event types
