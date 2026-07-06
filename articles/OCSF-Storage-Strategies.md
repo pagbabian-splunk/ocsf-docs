@@ -64,7 +64,7 @@ OCSF makes heavy use of objects, which are structured sets of scalar and other o
 
 ### Schema Evolution
 
-Iceberg allows for schema column changes, partitioning and sorting changes at any time after tables are defined and populated. The changes take place and are realized for data written after the changes or until rewriting or compaction takes place. This mitigates some of the table mainteance that is necessary when either new products are onboarded or the OCSF schema itself evolves from version to version.
+Iceberg allows for schema column changes, partitioning and sorting changes at any time after tables are defined and populated. The changes take place and are realized for data written after the changes or until rewriting or compaction takes place. This mitigates some of the table maintenance that is necessary when either new products are onboarded or the OCSF schema itself evolves from version to version.
 
 ### Compaction
 
