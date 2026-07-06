@@ -1,7 +1,7 @@
 # OCSF – Iceberg Storage Strategies
 Paul Agbabian, April 2026; Updated May, June 2026
 
-Contributions by Matthias Valentin, Hunter Madison
+Contributions by Matthias Vallentin, Hunter Madison
 
 ## Overview
 There are multiple ways that OCSF structured events can be stored for analysis in Parquet/Iceberg table format. The following list is not exhaustive but forms the most common approaches seen so far in the industry. 
