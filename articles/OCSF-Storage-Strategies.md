@@ -46,21 +46,21 @@ OCSF makes heavy use of objects, which are structured sets of scalar and other o
 
 #### Example Table
 
-| Attribute | Parquet Column Type | Comment |
-| --------- | ----------- | ------- |
-├ time            |   bigint  |   ← Base required, partition on *days(time)*
-├ class_uid       |   int     |   ← Base required, partition on *class_uid*
-├ category_uid    |   int     |   ← Base required, partition on *category_uid*
-├ activity_id     |   int     |   ← Base required
-├ severity_id     |   int     |   ← Base required
-├ metadata        |   struct<version, product struct<name,vendor_name>, ...>    |   ← Base required, partition on *product.name*
-├ observables     |   list<struct<name, type, value, ...>>  |   ← Base optional
-├ device          |   struct<hostname, os struct<name,type>, ...>  |  ← [some class attribute], null for events that don't have one
-├ actor           |   struct<user struct<name,uid>, process struct<...>, ...>   | ...
-├ src_endpoint    |   struct<ip, port, ...> | ...
-├ dst_endpoint    |   struct<ip, port, ...> | ...
-├ file            |   struct<name, hashes list<struct<...>>, ...>   | ...
-└── ... (the rest of the join across classes)
+| Attribute | Iceberg Type | Comment |
+| --------- | ------------ | ------- |
+| `time` | `bigint` | Base required, partition on `days(time)` |
+| `class_uid` | `int` | Base required, partition on `class_uid` |
+| `category_uid` | `int` | Base required, partition on `category_uid` |
+| `activity_id` | `int` | Base required |
+| `severity_id` | `int` | Base required |
+| `metadata` | `struct<version, product struct<name, vendor_name>, ...>` | Base required, partition on `product.name` |
+| `observables` | `list<struct<name, type, value, ...>>` | Base optional |
+| `device` | `struct<hostname, os struct<name, type>, ...>` | Class-specific; null for events that don't have one |
+| `actor` | `struct<user struct<name, uid>, process struct<...>, ...>` | ... |
+| `src_endpoint` | `struct<ip, port, ...>` | ... |
+| `dst_endpoint` | `struct<ip, port, ...>` | ... |
+| `file` | `struct<name, hashes list<struct<...>>, ...>` | ... |
+| ... | ... | the rest of the union across classes |
 
 ### Schema Evolution
 
