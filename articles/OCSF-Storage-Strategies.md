@@ -6,12 +6,12 @@ Contributions by Matthias Vallentin, Hunter Madison
 ## Overview
 There are multiple ways that OCSF structured events can be stored for analysis in Parquet/Iceberg table format. The following list is not exhaustive but forms the most common approaches seen so far in the industry. 
 
-1.  Single table
-2.	By event source
-3.	By event category
-4.	By event class
-5.	By Observable and category
-6.  By Required only
+1. Single table
+2. By event source
+3. By event category
+4. By event class
+5. By Observable and category
+6. By Required only
 
 
 This short document will discuss the pros and cons of each strategy along with general considerations that apply to each strategy.
