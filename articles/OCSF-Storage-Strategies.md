@@ -68,7 +68,7 @@ Iceberg allows for schema column changes, partitioning and sorting changes at an
 
 ### Compaction
 
-Over time, data can get stale, or the frequency of new data subsides such that the underlying files become too small, hindering compression, and forcing more file opens. For partitioning and sorting changes that would benefit historical data, rewriting the table files to compact them into more optimum sizes (usually around 125 MB) can be done. This is termed compaction and is part of the maintenance of the Iceberg lakehouse. As schema changes can be made at any time, for example adding class tables, new partitions, or adding columns to existing tables, the volume flow frequency that fragments the Parquet files will benefit from compaction periodically.
+Over time, data can get stale, or the frequency of new data subsides such that the underlying files become too small, hindering compression, and forcing more file opens. For partitioning and sorting changes that would benefit historical data, rewriting the table files to compact them into more optimum sizes (typically 128 MB to 512 MB; Iceberg's default write target is 512 MB) can be done. This is termed compaction and is part of the maintenance of the Iceberg lakehouse. As schema changes can be made at any time, for example adding class tables, new partitions, or adding columns to existing tables, the volume flow frequency that fragments the Parquet files will benefit from compaction periodically.
 
 Compaction does not need to be applied to an entire table, but can be applied to specific partitions or date ranges.
 
