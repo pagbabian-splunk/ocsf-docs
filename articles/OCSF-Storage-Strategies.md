@@ -176,7 +176,7 @@ The original intent of the observables was for threat intelligence matching, whe
 
 There is another use case for Observables: a table constructed for observables will be common across every event class, and therefore every event across all products. This table can have foreign keys to dimension tables much like a STAR schema in OLAP. The Observables array is flattened into about 40 columns, along with the most important Base event attribute columns that identify and classify the events.
 
-In practice, many analytics can run very efficiently directly against a single table across all products and classes, while drill-down and detailed investigation is performed by a minimum number of joins to dimension tables (i.e. joins are not required for detection analytics, only for drill-down).
+In practice, many analytics can run very efficiently directly against a single table across all products and classes, while drill-down and detailed investigation is performed by a minimum number of joins to dimension tables. Value-match detections, such as IOC matching and retrospective hunting over observable values, need no joins at all; detections that depend on richer event context than the observables and Base attributes carry will still join to the dimension tables.
 
 Based on the above analysis of strategies, either the By Event Class strategy or the By Event Category strategy could be employed for the dimension tables. Given that for most use cases, By Event Category is more efficient than By Event Class, using categories as the dimension tables is suggested here.
 
