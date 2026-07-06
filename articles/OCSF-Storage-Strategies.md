@@ -88,7 +88,7 @@ This means that the Iceberg tables will have additional columns from the profile
 
 ## Single Table Join-Union
 
-One obvious approach that has been used at large scale is a single, partitioned table with structured Parquet columns. Logically, separate class tables would be joined (as with a LEFT OUTER JOIN), and the table would be a union of the events across all classes.
+One obvious approach that has been used at large scale is a single, partitioned table with structured Parquet columns. Logically, the table's schema is the union of all class schemas: the shared Base class attributes appear once, while class-specific attributes are null for events of other classes. The table then holds the union of all events across all classes.
 
 Given the number of OCSF dictionary attributes that can be combined into the number of OCSF objects, and optional profiles that add attributes across classes and objects, the distinct number of underlying Iceberg column Field IDs can be very high. Nevertheless, with proper partitioning this approach has its advantages. In practice, not every class is required for the particular event sources that are stored. They can be added as necessary with schema evolution metadata updates.
 
