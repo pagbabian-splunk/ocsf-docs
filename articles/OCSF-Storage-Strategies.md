@@ -88,7 +88,7 @@ This means that the Iceberg tables will have additional columns from the profile
 
 ## Single Table Join-Union
 
-One obvious approach that has been used at large scale is a single, partitioned table with structured Parquet columns. Logically, the table's schema is the union of all class schemas: the shared Base class attributes appear once, while class-specific attributes are null for events of other classes. The table then holds the union of all events across all classes.
+One obvious approach that has been used at large scale is a single, partitioned table with structured Parquet columns. Logically, the table's schema is the union of all class schemas: the shared Base class attributes and profile attributes appear once, while class-specific attributes are null for events of other classes. The table then holds the union of all events across all classes.
 
 Given the number of OCSF dictionary attributes that can be combined into the number of OCSF objects, and optional profiles that add attributes across classes and objects, the distinct number of underlying Iceberg column Field IDs can be very high. Nevertheless, with proper partitioning this approach has its advantages. In practice, not every class is required for the particular event sources that are stored. They can be added as necessary with schema evolution metadata updates.
 
@@ -97,7 +97,7 @@ Given the number of OCSF dictionary attributes that can be combined into the num
 -	Reuse of table by multiple products
 -	Minimize duplication of related columns within a table
 -   No cross-table joins for all use cases including single source or product queries
--   Single target for all ETL targets
+-   Single table for all ETL targets
 -   Leverage schema evolution for new class and partition maintenance
 
 ### Single Table Cons
@@ -176,7 +176,7 @@ The original intent of the observables was for threat intelligence matching, whe
 
 There is another use case for Observables: a table constructed for observables will be common across every event class, and therefore every event across all products. This table can have foreign keys to dimension tables much like a STAR schema in OLAP. The Observables array is flattened into about 40 columns, along with the most important Base event attribute columns that identify and classify the events.
 
-In practice, many analytics can run very efficiently directly against a single table across all products and classes, while drill-down and detailed investigation is performed by a minimum number of joins to dimension tables. Value-match detections, such as IOC matching and retrospective hunting over observable values, need no joins at all; detections that depend on richer event context than the observables and Base attributes carry will still join to the dimension tables.
+In practice, many analytics can run very efficiently directly against a single table across all products and classes, while drill-down and detailed investigation is performed by a minimum number of joins to dimension tables. Value-match detections, such as IOC matching and retrospective hunting over observable values, need no joins at all; the specific attribute is available in the `name` attribute (e.g. `src_endpoint.ip` or `file.name`) and is available to a query predicate. Detections that depend on richer event context than the observables and Base attributes carry will still join to the dimension tables.
 
 Based on the above analysis of strategies, either the By Event Class strategy or the By Event Category strategy could be employed for the dimension tables. Given that for most use cases, By Event Category is more efficient than By Event Class, using categories as the dimension tables is suggested here.
 
@@ -193,3 +193,19 @@ Based on the above analysis of strategies, either the By Event Class strategy or
 -	Duplication of data: an additional table is required with duplicate values from the category dimension tables (since dimension tables hold full fidelity events)
 -	ETL is less straightforward as the Observables array needs to be retrieved and parsed before events are stored (and the array removed from the events to reduce but not eliminate duplication in dimension tables).
 
+## By Required Only
+
+This a simplified variant of the aforementioned Single Table Join-Union approach where only OCSF *Required* attributes are stored in one table. The number of columns and therefore Iceberg Field IDs is much smaller than in the Single-table model (< 1000 as of vs. 1.8), negating most of the cons of that approach.
+
+### Required Only Pros
+-	A stable number of tables (1)
+-	Reuse of table by multiple products
+-	Minimize duplication of related columns within a table
+-   No cross-table joins for all use cases including single source or product queries
+-   Single table for all ETL targets
+-   Leverage schema evolution for new class and partition maintenance
+
+### Required Only Cons
+-   Full event fidelity is not available
+-   All use cases depend on a single table with cross-use-case data mingled in files and partitions
+-   May not satisfy a general case of applications due to an arbitrary (but necessary) column selection
