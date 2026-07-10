@@ -25,6 +25,8 @@ It should be noted that these tables will be sparsely populated in most cases wi
 
 However, minimizing the number of identical columns across tables may provide better compressibility, especially for row group columns of lower volume event types. This means when pre-joining multiple classes into a table, factoring out the identical attributes that become columns, since any single event will only populate the columns of a single OCSF class.
 
+In Iceberg/Parquet, a column absent from a data file costs zero (readers return null), null values compress to almost nothing via RLE-encoded definition levels, and adding columns is a pure metadata operation. The real cost of very wide tables is on the metadata path, which the Limits section below will cover.
+
 
 ### Parquet
 Parquet is a column-oriented file format whose files hold column values contiguously. Traditional row-oriented file formats like CSV or JSON, and RDBMS store columns across rows, and rows are stored contiguously along with all the column values. Due to the diversity of column types, and distribution of column values, this traditional approach does not compress as efficiently, as values need to be skipped across the columns of each row. For low cardinality columns, the compressibility is highest. Just as important, search performance tends to favor contiguously stored column values since most projections and predicates do not require all the columns in a row. Therefore I/O load is greatly reduced, and the time required to return a resultset is optimized.
@@ -80,6 +82,8 @@ There are no theoretical limits in Iceberg as to how many columns or rows a give
 Column IDs can run into internally reserved IDs for example. Query engines like AWS Athena can fail with more than 7500 columns, it has been reported. Statistics are collected for a limited number of columns, and configuring a high number of columns for statistics increases metadata size and impacts query planning. And while structured type columns can help keep top level columns in check, the depth and breadth of those structures can have practical limits, although they are quite high.
 
 While these limits (e.g. 10,000 columns or 1000 structured sub-columns) might seem very high, and they are, one should realize that the combinatorial total of every OCSF attribute in all of its object, profile and class combinations can exceed one million scalar columns. Therefore, particular implementations of Iceberg with the various query engines in practice determine the actual limitations.
+
+Note per-file min/max stats (collected for the first 100 columns by default, write.metadata.metrics.max-inferred-column-defaults), impact manifest size, and planning time.
 
 ### OCSF Profiles
 
