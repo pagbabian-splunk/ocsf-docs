@@ -12,9 +12,10 @@ There are multiple ways that OCSF structured events can be stored for analysis i
 4. By event class
 5. By Observable and category
 6. By Required only
+7. Semi-structured payload
 
 
-This short document will discuss the pros and cons of each strategy along with general considerations that apply to each strategy.
+This short document will discuss the pros and cons of each strategy along with general considerations that apply to each strategy. Note that these strategies compose rather than compete. By Category dimension tables + an Observables fact table + time partitioning is one coherent design, not three alternatives; likewise Required Only is a variant of Single Table.
 
 ## General Considerations
 
@@ -26,7 +27,7 @@ However, minimizing the number of identical columns across tables may provide be
 
 
 ### Parquet
-Parquet is a column-oriented file format whose files hold column values contiguously, unlike row-oriented file formats like CSV or JSON, where each file stores columns across rows, where rows are stored contiguously. Due to the diversity of column types, and distribution of column values, this traditional approach does not compress as efficiently, as values need to be skipped across the columns of each row. For low cardinality columns, the compressibility is highest. Just as important, search performance tends to favor contiguously stored column values since most projections and predicates do not require all the columns in a row. Therefore I/O load is greatly reduced, and the time required to return a resultset is optimized.
+Parquet is a column-oriented file format whose files hold column values contiguously. Traditional row-oriented file formats like CSV or JSON, and RDBMS store columns across rows, and rows are stored contiguously along with all the column values. Due to the diversity of column types, and distribution of column values, this traditional approach does not compress as efficiently, as values need to be skipped across the columns of each row. For low cardinality columns, the compressibility is highest. Just as important, search performance tends to favor contiguously stored column values since most projections and predicates do not require all the columns in a row. Therefore I/O load is greatly reduced, and the time required to return a resultset is optimized.
 
 Iceberg doesn't define its own file format, but rather supports different underlying physical file formats, including Parquet. Avro, another format supported by Iceberg, is an example of a row-oriented format.
 
@@ -102,7 +103,7 @@ Given the number of OCSF dictionary attributes that can be combined into the num
 
 ### Single Table Cons
 -   Extremely high number of columns may hit metadata and query engine operational limits
--   The union of all events creates a massive dataset, impacting compaction
+-   The union of all events creates a massive dataset, impacting partitioning
 -   Compaction strategy is more complex
 -   All use cases depend on a single table with cross-use-case data mingled in files and partitions
 
@@ -195,7 +196,7 @@ Based on the above analysis of strategies, either the By Event Class strategy or
 
 ## By Required Only
 
-This a simplified variant of the aforementioned Single Table Join-Union approach where only OCSF *Required* attributes are stored in one table. The number of columns and therefore Iceberg Field IDs is much smaller than in the Single-table model (< 1000 as of vs. 1.8), negating most of the cons of that approach.
+This a simplified variant of the aforementioned Single Table Join-Union approach where only OCSF *Required* attributes are stored in one table. The number of columns and therefore Iceberg Field IDs is much smaller than in the Single-table model (< 1000 as of v1.8), negating most of the cons of that approach.
 
 ### Required Only Pros
 -	A stable number of tables (1)
@@ -209,3 +210,22 @@ This a simplified variant of the aforementioned Single Table Join-Union approach
 -   Full event fidelity is not available
 -   All use cases depend on a single table with cross-use-case data mingled in files and partitions
 -   May not satisfy a general case of applications due to an arbitrary (but necessary) column selection
+
+## Semi-structured Payload
+This strategy can be combined with any of the other strategies. It promotes a small, stable set of attributes to real columns and stores the complete event in a single semi-structured payload column. The promoted set consists of the Base event required attributes (time, class_uid, category_uid, activity_id, severity_id, metadata) plus a curated set of frequently queried attributes that will be use-case specific. The promoted columns carry partitioning, sorting, and column statistics; the payload column preserves full fidelity.
+
+Today the payload is typically a JSON string column. With Iceberg V3, the variant type makes this pattern first-class: variant values can be shredded into Parquet subcolumns for the paths that benefit from columnar access, while the schema stays flexible for everything else. (Engine support for variant is still maturing, so a JSON string column remains the portable fallback.)
+
+Promotion is decoupled from the wire contract: producers always ship the full event into the payload column, and promoting a new attribute is a metadata-only schema evolution plus one more extraction expression in the ETL. Producers never change.
+
+### Semi-structured Payload Pros
+- Fixed, small number of columns, immune to the combinatorial growth described in Limits: no stats/metadata bloat, no query engine column caps
+- Single table and single ETL target; the wire contract never changes as columns are promoted
+- Full event fidelity retained in the payload; attributes can be promoted late, applying to new data immediately via schema evolution
+- Works today with a JSON string column; Iceberg V3 variant with Parquet shredding makes it first-class
+
+### Semi-structured Payload Cons
+- Queries on unpromoted attributes require JSON/variant extraction: slower, and without column statistics there is no file pruning on those predicates
+- Choosing the promoted set is a design commitment that must be informed by query patterns
+- Promoted values are duplicated in the payload unless stripped at ingest (same trade-off as the Observables approach)
+- Variant support across query engines is uneven at the time of writing; the JSON-string fallback loses native typing
