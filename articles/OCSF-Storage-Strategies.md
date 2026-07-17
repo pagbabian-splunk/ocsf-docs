@@ -43,7 +43,7 @@ Iceberg has hidden partitioning and schema evolution features that make table ma
 
 The OCSF `Timetamp` (`timestamp_t`) data type is defined as the number of milliseconds stored as a `long` since the Unix Epoch, 01/01/1970 00:00:00 UTC. The Iceberg `timestamptz` type is defined as the number of *microseconds* since the Unix Epoch or in the case of `timestamptz_ns`, *nanoseconds*. (The `time`, `timestamp` and `timestamp_ns` types are not UTC but local time). Therefore, when converting from OCSF `Timestamp` values to Iceberg `timestamptz` columns, you should multiply by a factor of 1,000 (or 1,000,000 for nanoseconds) in order to avoid time shift errors. Iceberg aware programming interfaces like Java or Spark will handle conversion based on their own time and date types, but for directly inserting integral data values this must be done explicitly.
 
-You might ask, why not just use a `long` data type and maintain the original OCSF logical data type as an Iceberg column? The reason has to do with how Iceberg's hidden partitions work with time transforms, which expect timestamp related columns. For example if you want to partition by months, and you have inserted the OCSF `time` attribute value into an Iceberg `timestamptz` column, you would use a months(time) transform as the partition key. 
+You might ask, why not just use a `long` data type and maintain the original OCSF logical data type as an Iceberg column? The reason has to do with how Iceberg's hidden partitions work with time transforms, which expect `timestamp` related columns. For example if you want to partition by months, and you have inserted the OCSF `time` attribute value into an Iceberg `timestamptz` column, you would use a `months(time)` transform as the partition key. 
 
 ### Sorting
 
