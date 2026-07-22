@@ -1,18 +1,18 @@
 # OCSF – Iceberg Storage Strategies
-Paul Agbabian, April 2026; Updated May, June 2026
+Paul Agbabian, April 2026; Updated May-July 2026
 
-Contributions by Matthias Vallentin, Hunter Madison
+Contributions by Matthias Vallentin, Hunter Madison, Rajas Panat
 
 ## Overview
 There are multiple ways that OCSF structured events can be stored for analysis in Parquet/Iceberg table format. The following list is not exhaustive but forms the most common approaches seen so far in the industry. 
 
-1. Single table
-2. By event source
-3. By event category
-4. By event class
-5. By Observable and category
-6. By Required only
-7. Semi-structured payload
+1. Single Table
+2. By Event Source
+3. By Event Category
+4. By Event Class
+5. By Observable and Category
+6. By Required Only
+7. Semi-structured Payload
 
 
 This short document will discuss the pros and cons of each strategy along with general considerations that apply to each strategy. Note that these strategies compose rather than compete. By Category dimension tables + an Observables fact table + time partitioning is one coherent design, not three alternatives; likewise Required Only is a variant of Single Table.
@@ -39,6 +39,35 @@ Partitioning of a table is a physical organization of the underlying files, base
 
 Iceberg has hidden partitioning and schema evolution features that make table maintenance easier than with Hive or traditional RDBMS tables. Partitions can be made by values that are not explicit columns. For example, if a column is `time` with a microsecond resolution, Iceberg can partition by day without having to include a `day` column. And partitions can change over time, as with schema. Nevertheless, maintenance and onboarding of new sources are dynamic considerations for any of the approaches discussed.
 
+### Data Type Mappings
+
+OCSF defines data types for scalar attributes, and considers OCSF objects as complex data types. This abstraction allows for data type constraints for better validation. OCSF normative schema definitions are expressed as JSON. The scalar data types have JSON base types, such as `int` and `string`. For example, a `hostname_t` data type uses the underlying `string` JSON type. This approach abstracts OCSF attributes that are used in special ways, e.g. a network port `port_t` as `int` allows attributes of `port_t` type to be constrained appropriately (0-65,535). 
+
+Iceberg has special column types as well, in particular time and date, `uuid`, `binary` and `variant` types. The Iceberg `struct` is a complex type. When mapping OCSF data types to Iceberg column types, use the following table:
+
+| OCSF Type | Iceberg Type | Notes |
+|-----------|-------------|-------|
+| `boolean_t` | `boolean` | |
+| `integer_t` | `int` | Covers enums, counts, IDs. |
+| `long_t` | `long` | Byte counts, durations, `type_uid`, etc. |
+| `float_t` | `double` | CVSS scores, lat/lon, percentiles, etc. `double` matches JSON number wire representation |
+| `timestamp_t` | `timestamptz` | Epoch millis × 1000. Enables `days()`/`hours()` partition transforms. Lower 3 micros digits always zero for OCSF-native events |
+| `datetime_t` | `string` (optional) | RFC-3339 sibling of `timestamp_t`. May be omitted if storage efficiency is prioritized and timezone offset is not needed; reconstruct at query time via `from_unixtime()` |
+| `port_t` | `int` | Range 0–65535 |
+| `string_t` | `string` | All constrained subtypes below are physically identical on disk |
+| `ip_t` | `string` | No native IP type in Iceberg. Canonicalize at ingest (RFC 5952 for IPv6). Min/max stats won't prune IP ranges; use bloom filters for exact-match |
+| `subnet_t` | `string` | CIDR notation |
+| `mac_t` | `string` | Canonicalize case and separators |
+| `hostname_t` | `string` | |
+| `email_t` | `string` | |
+| `url_t` | `string` | |
+| `file_path_t` | `string` | |
+| `uuid_t` | `uuid` | 16-byte fixed on disk; core spec type |
+| `bytestring_t` | `binary` | Decode base64 at ingest |
+| `json_t` | `variant` (V3) / `string` (fallback) | The escape hatch for `unmapped` and `data`; JSON string is the legacy fallback |
+| `object` | `struct` | Keep nested (see Structured Columns). Note that OCSF nests deeply; verify engine depth limits |
+| `is_array: true` | `list` | |
+
 #### A Note on Time Columns and the OCSF Timestamp Logical Type
 
 The OCSF `Timetamp` (`timestamp_t`) data type is defined as the number of milliseconds stored as a `long` since the Unix Epoch, 01/01/1970 00:00:00 UTC. The Iceberg `timestamptz` type is defined as the number of *microseconds* since the Unix Epoch or in the case of `timestamptz_ns`, *nanoseconds*. (The `time`, `timestamp` and `timestamp_ns` types are not UTC but local time). Therefore, when converting from OCSF `Timestamp` values to Iceberg `timestamptz` columns, you should multiply by a factor of 1,000 (or 1,000,000 for nanoseconds) in order to avoid time shift errors. Iceberg aware programming interfaces like Java or Spark will handle conversion based on their own time and date types, but for directly inserting integral data values this must be done explicitly.
@@ -57,7 +86,7 @@ OCSF makes heavy use of objects, which are structured sets of scalar and other o
 
 | Attribute | Iceberg Type | Comment |
 | --------- | ------------ | ------- |
-| `time` | `bigint` | Base required, partition on `days(time)` |
+| `time` | `timestamptz` | Base required, partition on `days(time)` |
 | `class_uid` | `int` | Base required, partition on `class_uid` |
 | `category_uid` | `int` | Base required, partition on `category_uid` |
 | `activity_id` | `int` | Base required |
@@ -89,7 +118,7 @@ Column IDs can run into internally reserved IDs for example. Query engines like 
 
 While these limits (e.g. 10,000 columns or 1000 structured sub-columns) might seem very high, and they are, one should realize that the combinatorial total of every OCSF attribute in all of its object, profile and class combinations can exceed one million scalar columns. Therefore, particular implementations of Iceberg with the various query engines in practice determine the actual limitations.
 
-Note per-file min/max stats (collected for the first 100 columns by default, write.metadata.metrics.max-inferred-column-defaults), impact manifest size, and planning time.
+Note that per-file min/max stats (collected for the first 100 columns by default, controlled by `write.metadata.metrics.max-inferred-column-defaults`), impact manifest size, and planning time.
 
 ### OCSF Profiles
 
@@ -157,7 +186,7 @@ Because of the commonality across event categories, columns are not duplicated a
 
 ### Category Cons
 -	Searching for all events from a single product requires searching all tables if the product events span categories
--   Table will be larger than by source or by event class impacting compaction
+-   Table will be larger than by source or by event class impacting partitioning
 
 ## By Event Class
 Each OCSF event is an instance of a single OCSF class. Events across different sources share the same classes, distinguished by their `metadata.source` or `metadata.product.name` attributes.
@@ -187,7 +216,7 @@ The original intent of the observables was for threat intelligence matching, whe
 
 There is another use case for Observables: a table constructed for observables will be common across every event class, and therefore every event across all products. This table can have foreign keys to dimension tables much like a STAR schema in OLAP. The Observables array is flattened into about 40 columns, along with the most important Base event attribute columns that identify and classify the events.
 
-In practice, many analytics can run very efficiently directly against a single table across all products and classes, while drill-down and detailed investigation is performed by a minimum number of joins to dimension tables. Value-match detections, such as IOC matching and retrospective hunting over observable values, need no joins at all; the specific attribute is available in the `name` attribute (e.g. `src_endpoint.ip` or `file.name`) and is available to a query predicate. Detections that depend on richer event context than the observables and Base attributes carry will still join to the dimension tables.
+In practice, many analytics can run very efficiently directly against a single table across all products and classes, while drill-down and detailed investigation is performed by a minimum number of joins to dimension tables. Value-match detections, such as IOC matching and retrospective hunting over observable values, need no joins at all; the `name` attribute identifies the specific attribute (e.g. `src_endpoint.ip` or `file.name`) and the `value` attribute is directly available to a query predicate. Detections that depend on richer event context than the observables and Base attributes carry will still join to the dimension tables.
 
 Based on the above analysis of strategies, either the By Event Class strategy or the By Event Category strategy could be employed for the dimension tables. Given that for most use cases, By Event Category is more efficient than By Event Class, using categories as the dimension tables is suggested here.
 
@@ -206,23 +235,22 @@ Based on the above analysis of strategies, either the By Event Class strategy or
 
 ## By Required Only
 
-This a simplified variant of the aforementioned Single Table Join-Union approach where only OCSF *Required* attributes are stored in one table. The number of columns and therefore Iceberg Field IDs is much smaller than in the Single-table model (< 1000 as of v1.8), negating most of the cons of that approach.
+This is a simplified variant of the aforementioned Single Table Join-Union approach where only OCSF *Required* attributes are stored in one table. The number of columns and therefore Iceberg Field IDs is much smaller than in the Single-table model (< 1000 as of v1.8), negating most of the cons of that approach.
 
 ### Required Only Pros
 -	A stable number of tables (1)
 -	Reuse of table by multiple products
--	Minimize duplication of related columns within a table
 -   No cross-table joins for all use cases including single source or product queries
 -   Single table for all ETL targets
 -   Leverage schema evolution for new class and partition maintenance
 
 ### Required Only Cons
--   Full event fidelity is not available
+-   Full event fidelity is not available; drill down requires a full-fidelity store
 -   All use cases depend on a single table with cross-use-case data mingled in files and partitions
 -   May not satisfy a general case of applications due to an arbitrary (but necessary) column selection
 
 ## Semi-structured Payload
-This strategy can be combined with any of the other strategies. It promotes a small, stable set of attributes to real columns and stores the complete event in a single semi-structured payload column. The promoted set consists of the Base event required attributes (time, class_uid, category_uid, activity_id, severity_id, metadata) plus a curated set of frequently queried attributes that will be use-case specific. The promoted columns carry partitioning, sorting, and column statistics; the payload column preserves full fidelity.
+This strategy can be combined with any of the other strategies. It promotes a small, stable set of attributes to real columns and stores the complete event in a single semi-structured payload column. The promoted set consists of the Base event required attributes (`time`, `class_uid`, `category_uid`, `activity_id`, `severity_id`, `metadata`) plus a curated set of frequently queried attributes that will be use-case specific. The promoted columns carry partitioning, sorting, and column statistics; the payload column preserves full fidelity.
 
 Today the payload is typically a JSON string column. With Iceberg V3, the variant type makes this pattern first-class: variant values can be shredded into Parquet subcolumns for the paths that benefit from columnar access, while the schema stays flexible for everything else. (Engine support for variant is still maturing, so a JSON string column remains the portable fallback.)
 
