@@ -70,7 +70,7 @@ Iceberg has special column types as well, in particular time and date, `uuid`, `
 
 #### A Note on Time Columns and the OCSF Timestamp Logical Type
 
-The OCSF `Timetamp` (`timestamp_t`) data type is defined as the number of milliseconds stored as a `long` since the Unix Epoch, 01/01/1970 00:00:00 UTC. The Iceberg `timestamptz` type is defined as the number of *microseconds* since the Unix Epoch or in the case of `timestamptz_ns`, *nanoseconds*. (The `time`, `timestamp` and `timestamp_ns` types are not UTC but local time). Therefore, when converting from OCSF `Timestamp` values to Iceberg `timestamptz` columns, you should multiply by a factor of 1,000 (or 1,000,000 for nanoseconds) in order to avoid time shift errors. Iceberg aware programming interfaces like Java or Spark will handle conversion based on their own time and date types, but for directly inserting integral data values this must be done explicitly.
+The OCSF `Timestamp` (`timestamp_t`) data type is defined as the number of milliseconds stored as a `long` since the Unix Epoch, 01/01/1970 00:00:00 UTC. The Iceberg `timestamptz` type is defined as the number of *microseconds* since the Unix Epoch or in the case of `timestamptz_ns`, *nanoseconds*. (The `time`, `timestamp` and `timestamp_ns` types are not UTC but local time; the Iceberg `time`is a time-of-day type). Therefore, when converting from OCSF `Timestamp` values to Iceberg `timestamptz` columns, you should multiply by a factor of 1,000 (or 1,000,000 for nanoseconds) in order to avoid time shift errors. Iceberg-aware programming interfaces like Java or Spark will handle conversion based on their own time and date types, but for directly inserting integral data values this must be done explicitly.
 
 You might ask, why not just use a `long` data type and maintain the original OCSF logical data type as an Iceberg column? The reason has to do with how Iceberg's hidden partitions work with time transforms, which expect `timestamp` related columns. For example if you want to partition by months, and you have inserted the OCSF `time` attribute value into an Iceberg `timestamptz` column, you would use a `months(time)` transform as the partition key. 
 
@@ -118,7 +118,7 @@ Column IDs can run into internally reserved IDs for example. Query engines like 
 
 While these limits (e.g. 10,000 columns or 1000 structured sub-columns) might seem very high, and they are, one should realize that the combinatorial total of every OCSF attribute in all of its object, profile and class combinations can exceed one million scalar columns. Therefore, particular implementations of Iceberg with the various query engines in practice determine the actual limitations.
 
-Note that per-file min/max stats (collected for the first 100 columns by default, controlled by `write.metadata.metrics.max-inferred-column-defaults`), impact manifest size, and planning time.
+Note that per-file min/max stats (collected for the first 100 columns by default, controlled by `write.metadata.metrics.max-inferred-column-defaults`) impact manifest size and planning time.
 
 ### OCSF Profiles
 
